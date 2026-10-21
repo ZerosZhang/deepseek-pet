@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "layout_id": "modern-default-v1",
+  "nodes": [
+    {
+      "type": "separator",
+      "id": "default.separator-profile",
+      "visible": true
+    },
+    {
+      "type": "action",
+      "id": "animations_hub",
+      "visible": true,
+      "section": "playback"
+    },
+    {
+      "type": "separator",
+      "id": "default.separator-playback",
+      "visible": true
+    },
+    {
+      "type": "submenu",
+      "id": "pet_controls",
+      "label": "桌宠控制",
+      "visible": true,
+      "section": "pet",
+      "children": [
+        {
+          "type": "action",
+          "id": "no_move",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "on_top",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "autostart",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "return_corner",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "hide_pet",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "golden_spin",
+          "visible": true
+        },
+        {
+          "type": "action",
+          "id": "edge_probe",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "type": "separator",
+      "id": "default.separator-pet",
+      "visible": true
+    },
+    {
+      "type": "action",
+      "id": "quiet_mode",
+      "visible": true,
+      "section": "tools"
+    },
+    {
+      "type": "action",
+      "id": "memory_trim",
+      "visible": true,
+      "section": "tools"
+    },
+    {
+      "type": "action",
+      "id": "festival_now",
+      "visible": false,
+      "section": "tools"
+    },
+    {
+      "type": "action",
+      "id": "festival_toggle",
+      "visible": false,
+      "section": "tools"
+    },
+    {
+      "type": "separator",
+      "id": "default.separator-tools",
+      "visible": true
+    },
+    {
+      "type": "action",
+      "id": "modern_settings",
+      "visible": true,
+      "section": "system"
+    },
+    {
+      "type": "action",
+      "id": "quit",
+      "visible": true,
+      "section": "system"
+    }
+  ]
+}

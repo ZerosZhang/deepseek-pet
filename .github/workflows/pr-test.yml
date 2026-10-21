@@ -1,0 +1,279 @@
+name: PR Test Gate
+
+# PR/push 门禁：测试 + ruff。与三条 build-*.yml（tag/手动触发的打包发布）
+# 职责不同——本工作流给每个 PR 提供红绿判定，防止「测试只在本机是财富」。
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # 手动运行（Actions 页面 → Run workflow）：用于三端跨平台对齐——手动指定
+  # source_ref 时三端检出同一棵树。PR 路径不受影响：PR 事件仍检出合并提交
+  # （refs/pull/N/merge），保留「集成后才有红绿判定」的语义。
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: '要验证的 ref/SHA（留空 = 本 workflow 的触发 ref，即默认检出）'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    # 编码隔离（issue #26）：强制 UTF-8，避免中文源码/资源被 legacy 编码二次解码
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      QT_QPA_PLATFORM: offscreen
+      # keyring 在无桌面环境的 runner 上可能弹后端探测；测试不需要真实钥匙串
+      PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # PR 事件下 github.sha = 合并提交（refs/pull/N/merge），保持「集成后
+          # 才能过门」的语义；手动 dispatch 用 source_ref 指向同一棵树，供三端
+          # 跨平台对齐。留空即回落 github.sha（= 事件默认检出的那个提交）。
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      # 三端各自记录「这次到底验的是哪棵树」：PR 事件下 checkout HEAD 是合并
+      # 提交，与 PR 分支 tip 不是同一个 SHA——报告里要能对账，不能只靠印象。
+      - name: Record resolved source SHA
+        shell: bash
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          {
+            echo "### ${{ matrix.os }} 解析到的源码版本"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| event | ${{ github.event_name }} |"
+            echo "| workflow ref | ${{ github.ref }} |"
+            echo "| github.sha（PR = 合并提交） | ${{ github.sha }} |"
+            echo "| PR head sha（分支 tip） | ${{ github.event.pull_request.head.sha }} |"
+            echo "| checkout HEAD | $HEAD_SHA |"
+            echo "| checkout HEAD 摘要 | $(git log -1 --format=%s) |"
+            echo ""
+            echo "PR 事件下 checkout HEAD 是合并提交（集成语义），不等于分支 tip；"
+            echo "三端对齐请用手动 dispatch + source_ref 指向同一提交。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # PySide6 在 Linux 上 import 需要系统 EGL/GL 等库（与 build-linux.yml 一致）
+      - name: Install system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libfontconfig1 libdbus-1-3 fonts-noto-cjk
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # bridge 门禁依赖 `node --test`（Node 20 无 glob，清单硬编码在下面）。
+      # 显式固定 Node 版本：runner 预装版本会随时间漂移，门禁口径不能跟着飘。
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 三端「这一轮到底装了什么」必须留痕：requirements.txt 全是 `>=` 无上限、
+      # 无 lock，三端各自解析最新兼容版；imageio-ffmpeg 每平台是不同的 ffmpeg
+      # 构建，是 webm 族时序 flake 的平台差异源。
+      - name: Record toolchain versions
+        shell: bash
+        run: |
+          NODE_VERSION="$(node --version)"
+          python -m pip freeze > "$RUNNER_TEMP/pip-freeze.txt"
+          {
+            echo "### ${{ matrix.os }} 工具链"
+            echo ""
+            echo "- python: $(python --version 2>&1)"
+            echo "- node: $NODE_VERSION"
+            echo ""
+            echo "<details><summary>pip freeze</summary>"
+            echo ""
+            echo '```'
+            cat "$RUNNER_TEMP/pip-freeze.txt"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ruff
+        run: ruff check pet/ tests/
+
+      # 桥接插件零依赖门禁（2026-09 事故回归防线）：bridge 经 pnpm link: 链进
+      # 用户 profile，link 不装依赖、链接目标常是打包版 _internal 副本（无
+      # node_modules）——任何外部 bare import 都会让用户开联动后整个 dsh
+      # 插件树加载失败。此前这类回归无任何 CI 覆盖。
+      # 两层校验：node --test 跑全部 8 个 bridge 契约测试（原地 import 捕获
+      # 静态外部依赖回归）；verify_import.mjs 做 hermetic 校验（拷进无
+      # node_modules 的临时目录 import + 清单零依赖 + envelope 形状 + 动态
+      # import/require 静态禁令 + 临时目录祖先链污染探测）。
+      # 注意：新增 bridge 测试文件时必须同步下面的显式清单（Node 20 无 glob）。
+      - name: Bridge plugin zero-dependency gate
+        run: |
+          node --test tests/test_bridge_hardfailure.js tests/test_bridge_instance_scope.js tests/test_bridge_interaction_dedup.js tests/test_bridge_manifest.js tests/test_bridge_question_callid.js tests/test_bridge_retry.js tests/test_bridge_root_control.js tests/test_bridge_user_action_guard.js
+          node integrations/dsh-pet-bridge/verify_import.mjs
+
+      # 捕获方式按 OS 分流（2026-10-12）：Linux 主套件加 --capture=tee-sys，
+      # Windows/macOS 保持默认 fd 捕获 + -q。默认 fd 捕获把 fd 1/2 重定向到临时文件，
+      # 于是**直接写 fd 的原生输出**（glibc 的 abort 文本、Qt 默认消息处理器、pytest
+      # faulthandler 插件在 pytest_configure 里 os.dup 的那份 fd 2 转储）全落进临时
+      # 文件；进程被原生信号杀死时那份临时文件从不进日志——这正是 Linux 连续两轮
+      # abort 日志里一行原生栈都没有的原因（取证见 .scratch/ci243/
+      # WIN-LINUX-NATIVE-CRASH-FINDINGS-2026-10-11.md §3.4/§7.2b）。
+      # tee-sys 只替换 sys.stdout/stderr（tee 把同一份写回真流）**不碰 fd**，原生输出
+      # 直接进 CI 日志；Python 层输出照旧被捕获，capsys/capsysbinary 夹具自己起
+      # SysCapture、语义不变（本仓无 capfd 用例，也没有进程内读 stdin 的用例：
+      # sys.stdin 只出现在子进程脚本里）。
+      # 只给 Linux 加这一口：按 OS 条件内联拼出**同一条命令**，不复制出第二个主套件
+      # 步骤——主套件单跑就是 13-15 分钟（round3 实测 mac 13:10 / Windows 15:18）。
+      # id 供下面那条诊断步骤按 `steps.main_suite.outcome` 判定「红的正是主套件」。
+      - name: Pytest (main suite)
+        id: main_suite
+        if: runner.os != 'Windows'
+        run: python -m pytest -q ${{ runner.os == 'Linux' && '--capture=tee-sys' || '' }} --ignore=tests/test_webm_reader_lifecycle.py --ignore=tests/test_webm_clip_lifecycle.py --ignore=tests/test_webm_first_frame_lock.py --ignore=tests/test_low_priority_warm_interaction_yield.py
+
+      # Windows 主套件走分片（scripts/ci_shards.py：收集序四等分、四个独立进程）：
+      # 2026-10-13 起 hosted runner（Python 3.11.9 toolcache + PySide6 6.12.0）单进程
+      # 整跑在 ~2/3 处反复 access violation（崩点漂移的堆腐蚀签名，mac/Linux/本机
+      # 6.11.2 均不复现；main 同样受累）。分片让每个进程的堆状态从头开始，腐蚀没有
+      # 积累窗口（诊断分支两轮零崩），且崩溃归因更准（崩在哪个分片日志直接点名）。
+      # 不掩盖失败：任一分片红 = 本步红 = job 红。取证链见
+      # .scratch/ci243/WIN-AV-HUNT-2026-10-13.md（注：.scratch 不入库，属本地档案）。
+      - name: Pytest (main suite, Windows shards)
+        if: runner.os == 'Windows'
+        run: python scripts/ci_shards.py
+
+      # Linux 主套件失败后的**受限前缀**重跑（诊断，不是覆盖）：只跑收集序前缀
+      # test_agent_cost → test_config_schema（44 个文件；本机 3.11 + offscreen 同口径
+      # 实测 948 passed / 7 skipped / 2:27 全绿）。第三轮那次 abort 就落在该前缀的最后
+      # 一个文件里（tests/test_config_schema.py::
+      # test_reload_whitelist_snapshot_matches_current，面包屑只有 [call] 没有
+      # [teardown]），-vv 会把崩溃点印成日志最后一行。
+      # 限在前缀内是为了有界：Linux runner 跑到该前缀末位实测 91-104 s（round2/round3
+      # 从 pytest 启动到 abort 的时间戳），最慢一轮整 job（Windows 17.6 min）加这
+      # ~2.5 min 仍在 30 min 预算内。注意 round2 那次 abort 落在更靠后的
+      # test_desktop_pet_features（前缀之外 10 个文件）——那种落点由主套件的 tee-sys
+      # 原生日志取证，本步刻意不随崩点漂移扩大。
+      # 红绿不变：主套件步骤自己的退出码决定 job 结果，本步无 continue-on-error、
+      # 也不用 `||` 兜底。条件必须**显式**写 failure()：GitHub 在 `if:` 里没有状态
+      # 函数时会隐式套一层 success()，前序步骤一红本步会被直接跳过——诊断恰恰要在
+      # 红的时候跑。再加 `steps.main_suite.outcome == 'failure'`：只有主套件自己红
+      # 才重跑这 ~2.5 min，ruff/bridge 门或隔离族红不再多烧一轮（outcome 而非
+      # conclusion：前者是该步原始结果，不受 continue-on-error 影响）。
+      # 独立 DSPET_TEST_DIAG_DIR：诊断重跑若没复现崩溃，不许把主套件那份面包屑
+      # （「死在谁、哪个阶段」的唯一记录）覆盖成一份跑完通过的前缀记录。
+      # 清单显式写出：改名/删除当场 exit 4 报错，不会静默缩水，也不会因 glob 落空
+      # 退化成跑全量。新增测试文件落在该前缀内时同步此清单。
+      - name: Pytest (Linux prefix diagnostics after main-suite failure)
+        if: failure() && runner.os == 'Linux' && steps.main_suite.outcome == 'failure'
+        env:
+          DSPET_TEST_DIAG_DIR: ${{ runner.temp }}/dspet-pytest-diag-linux-prefix
+        run: >-
+          python -m pytest --capture=tee-sys -vv
+          tests/test_agent_cost.py
+          tests/test_agent_event_protocol.py
+          tests/test_agent_link.py
+          tests/test_agent_link_dep_specs.py
+          tests/test_agent_link_subtraction.py
+          tests/test_agent_link_threads.py
+          tests/test_agent_settings_hot_reload.py
+          tests/test_alert_queue.py
+          tests/test_animation_icon_worker_lifecycle.py
+          tests/test_animation_menu_close_and_group.py
+          tests/test_animation_prewarm_phase2.py
+          tests/test_animation_thumbnail_cache.py
+          tests/test_api_provider_list.py
+          tests/test_app_lazy_imports.py
+          tests/test_app_startup_fallback.py
+          tests/test_architecture.py
+          tests/test_autostart.py
+          tests/test_background_service_gates.py
+          tests/test_balance.py
+          tests/test_bubble_subtitle_budget.py
+          tests/test_bubble_text_scale.py
+          tests/test_bundle_encoding_check.py
+          tests/test_bundle_slim.py
+          tests/test_chat_attachments.py
+          tests/test_chat_safe_emit.py
+          tests/test_chat_service.py
+          tests/test_chat_shared_behavior.py
+          tests/test_chat_subsystem.py
+          tests/test_chat_themes.py
+          tests/test_child_bubble_quick_chat.py
+          tests/test_ci_workflows.py
+          tests/test_cleanup_mei_cache_cli.py
+          tests/test_click_self_talk_speech.py
+          tests/test_click_sound.py
+          tests/test_click_talk_dialog.py
+          tests/test_clip_current_image.py
+          tests/test_clip_restart_paths.py
+          tests/test_collision.py
+          tests/test_collision_debounce_timebase.py
+          tests/test_config_concurrent_save.py
+          tests/test_config_instance.py
+          tests/test_config_key_migration.py
+          tests/test_config_reload_null.py
+          tests/test_config_schema.py
+
+      # webm 生命周期族（reader/ffmpeg 进程 teardown 竞态）在 macOS CI 上
+      # 偶发段错误（exit 139，栈在 reader 线程 + imageio LogCatcher）。
+      # 段错误会杀掉整个 pytest 进程、拖垮主套件的结果报告，因此拆成
+      # 独立步骤：崩溃时只隔离失败这一步，主套件结果照常产出。
+      # 注意：拆步骤不改变测试内容，不掩盖失败——该红还是红。
+      - name: Pytest (webm lifecycle family, isolated)
+        run: python -m pytest -q tests/test_webm_reader_lifecycle.py tests/test_webm_clip_lifecycle.py tests/test_webm_first_frame_lock.py
+
+      # 低优预热让路族（test_low_priority_warm_interaction_yield.py）依赖真实
+      # 线程编舞（worker 阻塞/放行），断言本身正确但时序窗口在 CI 满载 runner
+      # 上会被极度拉长（本地与 ubuntu 稳过、windows CI 偶发批次起步超时）。
+      # 隔离 + 允许一次重跑：重跑仍红才算真失败，避免时序抖动拖垮 PR 门禁。
+      - name: Pytest (low-priority warm family, isolated + one retry)
+        run: python -m pytest -q tests/test_low_priority_warm_interaction_yield.py || python -m pytest -q tests/test_low_priority_warm_interaction_yield.py
+
+      # frameseq 崩溃家族已根治（2026-10-04，docs/PR-REPORT-QT-LIFECYCLE-CRASH-FAMILY）：
+      # 根因 = 丢弃未收口的 clip/worker 被 GC 析构时撞上共享预取线程的在途 queued
+      # 交付（mac 原生栈实锤 qtPythonMetacall 0x8 空解引用）；修复 = 进程级强钉 +
+      # 退役制收口。肇事单条回归主套件（不再 deselect）。本步骤保留为 frameseq 族
+      # 的独立重跑位（崩溃杀进程时主套件报告不受影响），照跑照判红。
+      - name: Pytest (frameseq native-crash isolates, isolated + one retry)
+        run: python -m pytest -q tests/test_frameseq_prefetch_watchdog.py tests/test_frameseq_clip.py || python -m pytest -q tests/test_frameseq_prefetch_watchdog.py tests/test_frameseq_clip.py
+
+      # 放在所有 pytest 步骤之后，主套件或隔离族失败均可回读最后运行的面包屑。
+      # 失败详情由 conftest 当刻写 stderr；这里只读末尾，不输出两万多行。
+      # 两个目录都回读：主套件那份（dspet-pytest-diag）与 Linux 受限前缀重跑那份
+      # （dspet-pytest-diag-linux-prefix，只有前缀步骤真跑过才存在）。前缀重跑若
+      # 没复现崩溃，主套件那份仍是「死在谁、哪个阶段」的唯一记录——只读其中一份
+      # 就会漏掉另一半现场。
+      - name: Pytest crash diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for NAME in dspet-pytest-diag dspet-pytest-diag-linux-prefix; do
+            DIR="${RUNNER_TEMP:-$TMPDIR}/$NAME"
+            if [ -f "$DIR/pytest-breadcrumb.txt" ]; then
+              echo "::group::$NAME/pytest-breadcrumb.txt (tail -30)"
+              tail -n 30 "$DIR/pytest-breadcrumb.txt"
+              echo "::endgroup::"
+            fi
+          done
+

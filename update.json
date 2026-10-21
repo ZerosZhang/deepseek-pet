@@ -1,0 +1,95 @@
+{
+  "version": "4.3.4",
+  "html_url": "https://github.com/MerZlin/dsh-pet-indesktop/releases/tag/untagged-49d2c138d1c57f06a6e7",
+  "notes": "v4.3.4 发布说明见仓库 docs/RELEASE-v4.3.4.md",
+  "assets": {
+    "dsh-pet-standalone-webm-chat-linux-x86_64.zip": {
+      "fileName": "dsh-pet-standalone-webm-chat-linux-x86_64.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-chat-linux-x86_64.zip"
+      ],
+      "size": 832242266,
+      "sha256": "6754d8505b67d0b6821d3204bff97cb0f79448729d6c84f704585ec99709653f",
+      "platform": "linux",
+      "kind": "archive",
+      "variant": "webm-chat"
+    },
+    "dsh-pet-standalone-webm-chat-macos-arm64.zip": {
+      "fileName": "dsh-pet-standalone-webm-chat-macos-arm64.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-chat-macos-arm64.zip"
+      ],
+      "size": 644130549,
+      "sha256": "37417ee54c578227459a701a91b552f73f08106df4fc787c9dc305901dbd5467",
+      "platform": "macos",
+      "kind": "archive",
+      "variant": "webm-chat"
+    },
+    "dsh-pet-standalone-webm-chat-portable.zip": {
+      "fileName": "dsh-pet-standalone-webm-chat-portable.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-chat-portable.zip"
+      ],
+      "size": 634357575,
+      "sha256": "333ea3ae7b319249ccb811157491252441d7a8b598e24557cfec61e14950cd64",
+      "platform": "windows",
+      "kind": "archive",
+      "variant": "webm-chat"
+    },
+    "dsh-pet-standalone-webm-chat-setup.exe": {
+      "fileName": "dsh-pet-standalone-webm-chat-setup.exe",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-chat-setup.exe"
+      ],
+      "size": 556661794,
+      "sha256": "b803279ba4a5e20126d2b955112a30495c98098b6fc5d0519245679d80177440",
+      "platform": "windows",
+      "kind": "installer",
+      "variant": "webm-chat"
+    },
+    "dsh-pet-standalone-webm-linux-x86_64.zip": {
+      "fileName": "dsh-pet-standalone-webm-linux-x86_64.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-linux-x86_64.zip"
+      ],
+      "size": 831744771,
+      "sha256": "2be5ec3998720e63d6f2ac6deabb88916743023fac6ac23747a300c62e5b7b69",
+      "platform": "linux",
+      "kind": "archive",
+      "variant": "webm"
+    },
+    "dsh-pet-standalone-webm-macos-arm64.zip": {
+      "fileName": "dsh-pet-standalone-webm-macos-arm64.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-macos-arm64.zip"
+      ],
+      "size": 643628916,
+      "sha256": "714050ddd0aa2b2e3d2f851a2e9cb51f6c75f5fc3855106c1d4f53e5da46ac52",
+      "platform": "macos",
+      "kind": "archive",
+      "variant": "webm"
+    },
+    "dsh-pet-standalone-webm-portable.zip": {
+      "fileName": "dsh-pet-standalone-webm-portable.zip",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-portable.zip"
+      ],
+      "size": 634127017,
+      "sha256": "86f7a51fa4a9e23ea82fd723cb5216455c28dfbb4136dcb70819f1dd8d988e83",
+      "platform": "windows",
+      "kind": "archive",
+      "variant": "webm"
+    },
+    "dsh-pet-standalone-webm-setup.exe": {
+      "fileName": "dsh-pet-standalone-webm-setup.exe",
+      "urls": [
+        "https://github.com/MerZlin/dsh-pet-indesktop/releases/download/untagged-49d2c138d1c57f06a6e7/dsh-pet-standalone-webm-setup.exe"
+      ],
+      "size": 556427591,
+      "sha256": "dc1b625e72bfee985fa54f05d86864ed1281a5b4f32e783f97a3444996d662d2",
+      "platform": "windows",
+      "kind": "installer",
+      "variant": "webm"
+    }
+  }
+}

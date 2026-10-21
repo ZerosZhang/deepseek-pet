@@ -1,0 +1,33 @@
+# Linux 官方 wheel 6.12.0 在 Python 3.11 下每次 void 方法调用少还一个 Py_None 引用，
+# 跑久了 none_dealloc → SIGABRT（上游 PR #245 定位；tests/test_qt_timer_refcount.py 守门）。
+# Windows 同版实测引用差为 0，不受影响，所以只在 Linux 封顶。
+PySide6>=6.5,<6.12; sys_platform == "linux"
+PySide6>=6.5; sys_platform != "linux"
+imageio-ffmpeg>=0.6
+Pillow>=10.3
+keyring>=25
+# keyring 的 **Windows 后端**实现依赖（import 名 `win32ctypes`，PyPI 名 pywin32-ctypes）。
+# 显式声明 + 构建脚本里 `--collect-all win32ctypes` 是**打包加固**，不是"不改就必然
+# 不可用"：PyInstaller 自带的 hook 通常收得到它（实测 4.3.3 / 4.3.4 的 exe 内嵌 PYZ
+# 里 `win32ctypes.*` 都在），且 `keyring.backends.Windows` 在 ImportError 时还会回退到
+# pywin32 的 `pywintypes`/`win32cred`。加固的理由：那条收集是隐式的，与 keyring 版本
+# 失配时会静默丢，症状（凭据只活在写它的进程内存里、界面仍显示"已保存"）用户侧看不见。
+pywin32-ctypes>=0.2.0; platform_system == "Windows"
+certifi>=2024.0.0
+tzdata>=2024.1
+# 节日提醒（pet/festival_calendar.py）的农历与 24 节气换算。
+#
+# 许可证是硬约束：**不要换成流传更广的 lunardate / zhdate**。那两个都是
+# GPL-3.0-or-later（同源于 1988 年 Fung F. Lee / Ricky Yeung 的 GPLv2
+# lunar 项目），而本项目是 MIT，引入即造成 copyleft 传染。lunar-python
+# (6tail) 为 MIT，纯 Python，无数据文件、无传递依赖，PyInstaller 静态
+# 分析可完整收集（无需 --collect-all）。其农历与节气日已实测校验。
+lunar-python>=1.4.8
+
+# —— 开发依赖（测试 + 静态检查）——
+# pytest：测试套件入口（README「测试与验证」与本仓库 CI 都依赖它）。
+# ruff：`ruff check pet/ tests/` 用的静态检查器（规则基线见 pyproject.toml
+# 的 [tool.ruff]，仅 F 级）。不参与运行时；声明在此使 fresh environment
+# 能按 requirements 复现静态检查（FINAL_REVIEW_GPT.md 提交卫生项，批10 补）。
+pytest>=8
+ruff>=0.5
