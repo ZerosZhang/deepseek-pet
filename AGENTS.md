@@ -174,87 +174,27 @@ permission rather than treating errno 1 as a product failure.
 
 ## Agent skills
 
-### Issue tracker
-
-Issues and specs use Local Markdown under `.scratch/<feature-slug>/`. See
-`docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the five canonical local triage states. See
-`docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Use the single-context layout: root `CONTEXT.md` and system ADRs under
-`docs/adr/`. See `docs/agents/domain.md`.
-
-### Qt UI review
-
-Use `.agents/skills/qt-ui-review/SKILL.md` when reviewing settings, menus,
-overlays, QSS, accessibility, or cross-platform desktop presentation.
-
-### Qt UI development
-
-Use `.agents/skills/desktop-pet-ui-style/SKILL.md` when adding or materially
-restyling settings, menus, dialogs, overlays, or desktop widgets.
-
-### Work handoff
-
-For unfinished multi-ticket work, read and refresh the feature's
-`.scratch/<feature-slug>/HANDOFF.md` before ending or resuming work. Keep the
-exact breakpoint there; see `docs/agents/handoff.md`.
+本仓库是上游的精简版本，不再包含 `.agents/skills/`、`docs/agents/`、
+`docs/adr/` 与 `.scratch/` 流程文档。需要历史约定时查上游仓库。
 
 ## Context pointers
 
-找文档先查 `docs/INDEX.md`（全文档入口索引：每条一句话 + 何时必读）；
-新文档入场必须按其中的规则登记并互链。高频专项指针：
+找文档先查 `docs/INDEX.md`（全文档入口索引：每条一句话 + 何时必读）。
 
-- Read `docs/ISSUE-111-WINDOWS-SESSION-END-FFMPEG-2026-09-12.md` when changing
-  ffmpeg spawning (`webm_clip` reader/first-frame/meta/exe probes), warm
-  scheduling, or anything that runs during Windows shutdown/logoff
-  (`session_watcher`, `match_shutdown`, `AppShell._on_session_end`).
-- Read `docs/ONEDIR_PACKAGING.md` when changing PyInstaller specs, bundled
-  resources, or platform build scripts.
-- Read `docs/ASSET-PIPELINE.md` when changing the frame-sequence encode grade
-  (`pet/frameseq_provision.py`: `ENCODER_DESC` / `UNBLEND_MARK` / `unblend_v3` /
-  `floor_faint_alpha`) or the build-time material gate
-  (`scripts/check_frameseq_bundle.py`, whose grade constants must stay
-  byte-identical to the runtime ones). Current grade is `unblend-white-v6`
-  (lossless). The runtime grade string, the build gate, and the material on disk
-  must all agree — a mismatch means the material is re-generated, never the
-  constant.
-- Read `docs/CONTEXT-MENU-RESEARCH-AND-REFACTOR-2026-08-25.md` when changing
-  context-menu structure, styling, interaction, or platform behavior.
+- Read `docs/ONEDIR_PACKAGING.md` when changing PyInstaller args, bundled
+  resources, or `scripts/slim_bundle.py`.
 - Read `docs/SETTINGS-CHANGE-GATES.md` before adding, moving, removing, or
   changing a persistent setting or its settings-page interaction.
-- Read `docs/PERSONA-PHRASES-PRESET-STORAGE-2026-09-08.md` before changing
-  dialogue preset files (`pet/persona_presets/*.json`), phrase loading
-  (`persona_phrases.py`), or expression-style semantics
-  (`dialogue_mode`/`dialogue_phrases`).
-- Read `docs/PR-MERGE-LESSONS-2026-09-12.md` before merging PRs: stacked-PR
-  conflicts after squashing the parent, budget/red-line changes that only break
-  when two PRs combine, and timing-test flake discipline (poll state with a wide
-  budget instead of fixed sleeps).
-- Read `docs/NETWORK-PROXY-AND-VPN-2026-09-22.md` when touching any networked
-  feature (music lyrics, edge-tts voice, updater, balance, vision, chat) or when
-  a report sounds like "X worked yesterday and now it doesn't": the Windows
-  system proxy / VPN is a first-class suspect — it made lyric fetching 20-41s
-  (all three sources timed out) on 2026-09-22, while jsdelivr update checks only
-  work *through* the proxy. Lyric requests try direct first and fall back to the
-  system proxy exactly once — only on a transport failure or HTTP 500/502/504,
-  sharing `fetch_lyrics`' single deadline budget (`pet/music_lyric.py`:
-  `_build_opener` / `_may_switch_to_proxy` / `_fallback_proxy` /
-  `_attempt_timeout`; 404/429/503 and other definitive answers never switch
-  routes, and neither does any response carrying `Retry-After`). The fallback
-  only counts when the URL's own scheme (http/https) has a proxy that the system
-  `proxy_bypass` list does not exempt — a `NO_PROXY`-only or other-scheme config
-  is not a second route. Never log proxy addresses, credentials, or raw
-  exception/URL text: route names, exception type, HTTP status and `Retry-After`
-  only. Other features keep following the proxy.
+- Read `docs/ASSET-PIPELINE.md` when changing the frame-sequence encode grade
+  (`pet/frameseq_provision.py`) or the build-time material gate
+  (`scripts/check_frameseq_bundle.py`). Runtime grade, build gate and material on
+  disk must agree.
+- Read `docs/WINDOW_PY_SPLIT_GUIDE.md` before growing `window.py`.
+- Read `docs/CONTEXT-MENU-RESEARCH-AND-REFACTOR-2026-08-25.md` when changing
+  context-menu structure, styling, interaction, or platform behavior.
 - Treat `assets/characters/<id>/videos/` plus its manifest as one character
-  package; preserve relative paths and case because packaged platforms differ.
-  The manifest may declare `body_box` (`[x1, y1, x2, y2]` in source pixels,
-  mirror-symmetrized): the stable body rect used as the placement/edge-clamp
-  anchor (`pet/catalog.py character_body_box`); measure it at alpha≥128 to
-  match the mask/visual edge, and omit it to fall back to full-canvas behavior.
+  package; preserve relative paths and case. The manifest may declare `body_box`
+  (`[x1, y1, x2, y2]` in source pixels, mirror-symmetrized): the stable body rect
+  used as the placement/edge-clamp anchor (`pet/catalog.py character_body_box`);
+  measure it at alpha≥128 to match the mask/visual edge.
+

@@ -31,14 +31,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 PS1 = REPO / "scripts" / "build_onedir.ps1"
-SHELLS = {
-    "linux": REPO / "scripts" / "build_linux.sh",
-    "macos": REPO / "scripts" / "build_macos.sh",
-}
-BUILD_SCRIPTS = [PS1, *SHELLS.values()]
-ANDROID_EXPORT = REPO / "scripts" / "export_android_assets.py"
-ANDROID_GRADLE = REPO / "android" / "app" / "build.gradle.kts"
-ANDROID_NOTICE = REPO / "android" / "NOTICE.txt"
+BUILD_SCRIPTS = [PS1]
 NOTICES = REPO / "THIRD_PARTY_NOTICES.md"
 
 #: 随包分发的两份声明（仓根）：项目自身的 MIT 许可 + 第三方素材/组件声明。
@@ -122,52 +115,6 @@ def test_notices_carry_the_full_mit_text_for_the_click_sounds():
     assert METEORNOX_COPYRIGHT in text
     assert MIT_GRANT in text
 
-
-def _load_android_exporter():
-    """按文件路径加载导出脚本（``scripts/`` 不是包，import 不进来）。"""
-    spec = importlib.util.spec_from_file_location("export_android_assets", ANDROID_EXPORT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["export_android_assets"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_android_export_carries_the_notices_into_the_apk_assets(tmp_path):
-    """APK 资产里要有声明文件本体，且 MIT 正文真的在资产里（不是一句链接）。"""
-    module = _load_android_exporter()
-    output = tmp_path / "assets"
-    output.mkdir()
-
-    written = module.copy_notices(output)
-
-    names = sorted(path.name for path in written)
-    assert names == ["LICENSE-APACHE-2.0.txt", "NOTICE.txt", "THIRD_PARTY_NOTICES.md"]
-    for name in names:
-        assert (output / name).is_file(), f"{name} 没有真的落进资产"
-
-    exported = (output / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-    assert METEORNOX_COPYRIGHT in exported
-    assert MIT_GRANT in exported
-    assert "THE SOFTWARE IS PROVIDED \"AS IS\"" in exported, "MIT 正文不完整"
-
-
-def test_android_notice_points_at_a_file_that_ships_inside_the_apk():
-    """NOTICE.txt 里那段 MIT 说明不许再指向"源码仓库"（用户手里只有 APK）。"""
-    text = ANDROID_NOTICE.read_text(encoding="utf-8")
-    paragraph = text.split("Click sound pair bundled", 1)[1].split("\n\n", 1)[0]
-
-    assert METEORNOX_COPYRIGHT in paragraph
-    assert "THIRD_PARTY_NOTICES.md" in paragraph
-    assert "source repository" not in paragraph, (
-        "声明不能把用户指向他手里没有的源码仓库——那份文件现在就在 APK 资产里"
-    )
-
-
-def test_android_gradle_tracks_the_notice_input():
-    """Gradle 的输入清单要含声明文件，否则改了声明不会触发资产重导出。"""
-    text = ANDROID_GRADLE.read_text(encoding="utf-8")
-    assert 'inputs.file(repository.resolve("THIRD_PARTY_NOTICES.md"))' in text
 
 
 def test_packaging_doc_registers_the_keyring_rule_and_the_notices():

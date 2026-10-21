@@ -1,8 +1,8 @@
 # DeepSeek 桌宠（精简版）
 
-一个基于 **Python + PySide6** 的透明桌面宠物：无边框、置顶、可拖拽、会自己走动和播放动画，带右键菜单、系统托盘与设置页。
+> **本项目参考 [MerZlin/dsh-pet-indesktop](https://github.com/MerZlin/dsh-pet-indesktop)（MIT）**，是它的**精简版本**：只保留桌宠本体，移除了大量功能（完整清单见文末「已移除的功能」）。上游的原创代码与素材版权归原作者所有，见 [LICENSE](LICENSE) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-本仓库是 [`MerZlin/dsh-pet-indesktop`](https://github.com/MerZlin/dsh-pet-indesktop)（MIT）的**精简副本**，只保留桌宠本体，删掉了上游的 AI 对话、识屏、语音、音乐、天气、Agent 联动等全部扩展模块。上游的原创代码与素材版权归原作者，见 [LICENSE](LICENSE) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+一个基于 **Python + PySide6** 的透明桌面宠物：无边框、置顶、可拖拽、会自己走动和播放动画，带右键菜单、系统托盘与设置页。
 
 ## 运行
 
@@ -65,12 +65,18 @@ python -m pytest -q
 - `assets/characters/<id>/frameseq/`：帧序列派生产物，**不入库**，由 `tools/convert_frameseq.py` 生成
 - `assets/sounds/`：内置点击音效（MeteorNOX，MIT，正文见 THIRD_PARTY_NOTICES.md）
 
-## 已移除的功能
+## 与上游的差异（只保留核心）
 
-AI 对话与余额对话链、看看屏幕 / 截图提问 / 主动识屏、Agent 联动与桥接插件、音乐与歌词、天气、抽签、待办、快捷启动、切换角色与角色包、灵动岛、多实例、直播捕获、彩蛋入口、语音报时 / TTS、文件识别、更新检查。相关配置键、设置页分组、菜单项、打包钩子与测试一并删除。
+在 `MerZlin/dsh-pet-indesktop` 基础上删除了：
+
+**功能**：AI 对话与余额对话链、看看屏幕 / 截图提问 / 主动识屏、Agent 联动与桥接插件、音乐与歌词、天气、抽签、待办、快捷启动、切换角色与角色包、灵动岛、多实例、直播捕获、彩蛋入口、语音报时 / TTS、文件识别、更新检查。对应的配置键、设置页分组、菜单项一并删除。
+
+**工程面**：Android 版、macOS / Linux 构建脚本与工作流、平台评测脚本、`docs/` 里描述已删功能的 160 余篇设计与 PR 报告、只被已删功能使用的依赖（rapidocr、onnxruntime、winrt、pycaw、psutil 等）与随包资源（OCR 模型 31MB、PresentMon、聊天背景图、彩蛋图池）。
+
+保留的是跑起来和构建必需的部分：`pet/`（产品代码）、`assets/characters/*/videos`（动画素材）、`packaging/`、`scripts/`（Windows 打包与素材门）、`tools/convert_frameseq.py`、`tests/`、`docs/`（8 篇现行约定）。
 
 ## 已知限制
 
 - 渲染有 overlay（默认）与 legacy（`PET_RENDER_TOPOLOGY=legacy`）两条拓扑，legacy 是开发逃生门
-- `build_linux.sh` / `build_macos.sh` 仍引用已删功能的校验脚本，尚未同步；Windows 构建链可用
-- `docs/` 是上游开发文档存档，包含已删功能的设计与历史报告，不对应当前行为
+- 只在 Windows 上验证；macOS / Linux 的构建链已随精简删除
+- 帧序列素材当前只有 22/106 段，未转换的段落运行时会回落到 WebM（多出 ffmpeg 子进程）

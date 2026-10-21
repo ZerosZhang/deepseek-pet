@@ -41,10 +41,6 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 ICON_FILE = REPO / "assets" / "icon.ico"
 PS1 = REPO / "scripts" / "build_onedir.ps1"
-SHELLS = {
-    "macos": REPO / "scripts" / "build_macos.sh",
-    "linux": REPO / "scripts" / "build_linux.sh",
-}
 ISS = REPO / "packaging" / "dsh-pet.iss"
 PACKAGING_DOC = REPO / "docs" / "ONEDIR_PACKAGING.md"
 
@@ -56,7 +52,6 @@ app = QApplication.instance() or QApplication([])
 RELATIVE = application_icon.APPLICATION_ICON_RELATIVE_PATH
 RELATIVE_POSIX = "/".join(RELATIVE)
 ADD_DATA_WINDOWS = '--add-data "' + RELATIVE_POSIX.replace("/", "\\") + ";" + RELATIVE[0] + '"'
-ADD_DATA_POSIX = f'--add-data "{RELATIVE_POSIX}:{RELATIVE[0]}"'
 
 #: 无 QApplication 的现场：把模块里的 ``QGuiApplication`` 换成只会老实回答"没有"的桩。
 _NO_APPLICATION = type("_NoApplication", (), {"instance": staticmethod(lambda: None)})
@@ -243,18 +238,6 @@ def test_the_cache_does_not_outlive_its_application(monkeypatch):
 # ------------------------------------------------------------------ 三、脚本语法
 
 
-@pytest.mark.parametrize("name", sorted(SHELLS))
-def test_shell_build_scripts_stay_syntactically_valid(name):
-    bash = shutil.which("bash")
-    if bash is None:
-        pytest.skip("这台机器没有 bash（脚本语法门在 Linux/macOS 上生效）")
-
-    completed = subprocess.run([bash, "-n", str(SHELLS[name])], capture_output=True, text=True,
-                               timeout=120)
-
-    assert completed.returncode == 0, completed.stderr
-
-
 def test_windows_build_script_stays_syntactically_valid():
     powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     if not powershell.is_file():
@@ -282,16 +265,6 @@ def test_the_windows_build_bundles_the_runtime_icon():
     assert ADD_DATA_WINDOWS in command, "--add-data 必须真的挂在 PyInstaller 命令上"
 
 
-@pytest.mark.parametrize("name", sorted(SHELLS))
-def test_the_shell_builds_bundle_the_runtime_icon(name):
-    text = SHELLS[name].read_text(encoding="utf-8")
-
-    assert ADD_DATA_POSIX in text, f"没有把运行期图标打进包：期望 {ADD_DATA_POSIX}"
-    command = text[text.index("args=("):text.index(")\n", text.index("args=("))]
-    assert ADD_DATA_POSIX in command, "--add-data 必须真的在 args 数组里"
-    assert '"${args[@]}" "$entry"' in text, "args 数组必须真的被交给 PyInstaller"
-
-
 def test_the_installer_ships_the_bundled_copy_without_extra_entries():
     """安装包不需要为图标加条目：它递归拷 onedir 整棵树，那条规则才是承重的。"""
     text = ISS.read_text(encoding="utf-8")
@@ -308,8 +281,6 @@ def test_the_runtime_asset_is_the_icon_the_builds_already_generate():
 
     assert "scripts\\make_icon.py" in windows
     assert windows.index("scripts\\make_icon.py") < windows.index("python -m PyInstaller")
-    macos = SHELLS["macos"].read_text(encoding="utf-8")
-    assert "scripts/make_icon.py --icns" in macos
     assert ICON_FILE.is_file(), f"{ICON_FILE.relative_to(REPO).as_posix()} 不在树上"
 
 
@@ -317,6 +288,5 @@ def test_packaging_doc_registers_the_runtime_manifest():
     text = PACKAGING_DOC.read_text(encoding="utf-8")
 
     assert RELATIVE_POSIX in text
-    for script in ("build_onedir.ps1", "build_macos.sh", "build_linux.sh"):
-        assert script in text
+    assert "build_onedir.ps1" in text
     assert "tests/test_application_icon.py" in text

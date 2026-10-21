@@ -38,14 +38,10 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 PR_TEST = WORKFLOWS / "pr-test.yml"
 BUILDS = {
     "windows": WORKFLOWS / "build-windows.yml",
-    "macos": WORKFLOWS / "build-macos.yml",
-    "linux": WORKFLOWS / "build-linux.yml",
 }
 # 构建入口（三端各自的真实命令），用于「素材供给必须排在构建之前」的位置断言
 BUILD_MARKERS = {
     "windows": "build_onedir.ps1",
-    "macos": "scripts/build_macos.sh",
-    "linux": "scripts/build_linux.sh",
 }
 PREPARE = "scripts/prepare_frameseq_bundle.py"
 CACHE_PATH = "assets/characters/*/frameseq"

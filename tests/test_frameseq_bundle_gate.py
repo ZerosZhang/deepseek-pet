@@ -480,65 +480,6 @@ class TestBuildScriptWiring:
         assert text[call - 800:call].count("GIF") >= 1, "注释要说明 GIF 变体为何跳过"
 
 
-# --------------------------------------------------------------------------- 三端 shell 接线
-
-SHELL_SCRIPTS = {
-    "macos": ROOT / "scripts" / "build_macos.sh",
-    "linux": ROOT / "scripts" / "build_linux.sh",
-}
-SHELL_CALL = "scripts/check_frameseq_bundle.py"
-
-
-def _shell_text(name: str) -> str:
-    return SHELL_SCRIPTS[name].read_text(encoding="utf-8")
-
-
-def _shell_gate_block(text: str) -> str:
-    """取 shell 脚本里调用本门的那段 ``if [[ "$needs_frameseq" == "1" ]]; then ... fi``。"""
-    call = text.index(SHELL_CALL)
-    start = text.rindex('if [[ "$needs_frameseq"', 0, call)
-    end = text.index("\nfi\n", call)
-    return text[start:end + 4]
-
-
-class TestShellBuildScriptWiring:
-    """macOS / Linux 的构建脚本本身必须带硬门，不能只在 workflow 里加。
-
-    只在 workflow 里加 = 本地构建、以及任何绕过 workflow 的构建仍然会打出
-    缺帧序列的静默降级包（Windows 的门就装在 ``build_onedir.ps1`` 里）。
-    """
-
-    @pytest.mark.parametrize("name", sorted(SHELL_SCRIPTS))
-    def test_gate_runs_before_pyinstaller(self, name):
-        text = _shell_text(name)
-        assert SHELL_CALL in text
-        assert text.index("check_frameseq_bundle") < text.index("-m PyInstaller")
-
-    @pytest.mark.parametrize("name", sorted(SHELL_SCRIPTS))
-    def test_gate_failure_aborts_build_explicitly(self, name):
-        text = _shell_text(name)
-        block = _shell_gate_block(text)
-        assert "check_frameseq_bundle.py" in block
-        assert "exit 1" in block, "门非零必须显式中止（不靠 set -e 隐式兜底）"
-        assert '"$PYTHON_BIN"' in block, "必须用构建用的解释器跑门（与 PyInstaller 同环境）"
-        assert set(("set -euo pipefail",)).issubset(set(text.splitlines()))
-
-    @pytest.mark.parametrize("name", sorted(SHELL_SCRIPTS))
-    def test_gif_only_variants_skip_gate(self, name):
-        text = _shell_text(name)
-        decision = text[text.index("needs_frameseq=0"):text.index(SHELL_CALL)]
-        assert "gif" in decision and "gif-chat" in decision, "GIF 变体没有 frameseq 这一层"
-        assert "needs_frameseq=1" in decision
-
-    @pytest.mark.parametrize("name", sorted(SHELL_SCRIPTS))
-    def test_gate_is_called_once_and_before_any_variant_build(self, name):
-        text = _shell_text(name)
-        # 一次调用即可覆盖全部变体：门是整树体检（全角色全 clip），与变体无关
-        assert text.count("check_frameseq_bundle.py") == 1
-        assert text.index(SHELL_CALL) < text.index('for variant in "${variant_list[@]}"')
-        assert text.index(SHELL_CALL) < text.index("-m PyInstaller")
-
-
 # --------------------------------------------------------------------------- 素材供给入口
 
 PREPARE_SCRIPT = ROOT / "scripts" / "prepare_frameseq_bundle.py"
