@@ -49,3 +49,7 @@ select = ["F"]
 "pet/modern_settings_dialog.py" = ["F401"] # 测试兼容 re-export（QDialogButtonBox/QAbstractItemView/QFileDialog/QColorDialog/QMessageBox/QLabel/QFrame/QWidget/QScrollArea/ColorSwatchButton 等模块级再导出，供 tests 断言与 monkeypatch；控件库已拆至 settings_widgets，本文件保留其符号的向后兼容 re-export）
 "pet/slot_manager.py" = ["F401", "F841"] # F401 typing.Any；F841 slot_manager.py:388 `step`
 "pet/window.py" = ["F401"]               # 未用导入 autostart_mod（tests 经 pet.window 注入的 re-export）
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["dist", "build", "dist-onedir", "build-onedir", "_internal", "*.egg-info", ".git", ".venv", ".mypy_cache", ".pytest_cache", "__pycache__"]
