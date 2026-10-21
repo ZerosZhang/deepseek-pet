@@ -105,17 +105,13 @@ The multi-process multi-pet layer (cross-process collision IPC, slot file locks,
 instance launcher, child-pet taskkill cleanup, runtime-marker live consumers) was
 deleted in Phase 4.4b; `tests/test_architecture.py` guards that the retired modules
 stay gone and are never imported again. Collision math is pure (`pet/collision.py`
-+ `pet/sprite_collision.py`); the island's stadium clamp lives in
-`sprite_collision.capsule_circles` via `pet/island_bridge.py`.
++ `pet/sprite_collision.py`).
 
-`pet/multi_window_shared.py` is always on: one process-wide agent_link /
-proactive / fullscreen watcher fanned out to every window or sprite. Under the
-overlay topology the shared fullscreen watcher is not started (the overlay shell
-owns its own `FullscreenCursorWatcher`). The DSH bridge directory has exactly one
-reader: `DshMonitor` (one `DirGlobTailer` + one polling thread; parsed records feed
-both the signal dispatch and the pure 8-state converger in `pet/dsh_state.py`,
-with the DSH port probe folded into the same thread), started by
-`AgentLinkManager.apply_config` only while `agent_link.dsh` is enabled.
+`pet/multi_window_shared.py` is always on: one process-wide fullscreen watcher
+(quiet mode) fanned out to every window or sprite. Under the overlay topology the
+shared fullscreen watcher is not started (the overlay shell owns its own
+`FullscreenCursorWatcher`). Agent-link / proactive / DSH-bridge consumers were
+removed with those features.
 
 ## Change discipline
 
@@ -220,35 +216,14 @@ exact breakpoint there; see `docs/agents/handoff.md`.
   (`session_watcher`, `match_shutdown`, `AppShell._on_session_end`).
 - Read `docs/ONEDIR_PACKAGING.md` when changing PyInstaller specs, bundled
   resources, or platform build scripts.
-- Read `docs/PR-REPORT-FRAMESEQ-ALPHA-FLOOR-2026-10-16.md` when changing the
-  frame-sequence encode grade or unblend chain
+- Read `docs/ASSET-PIPELINE.md` when changing the frame-sequence encode grade
   (`pet/frameseq_provision.py`: `ENCODER_DESC` / `UNBLEND_MARK` / `unblend_v3` /
-  `floor_faint_alpha`), the build-time material gate
+  `floor_faint_alpha`) or the build-time material gate
   (`scripts/check_frameseq_bundle.py`, whose grade constants must stay
-  byte-identical to the runtime ones), or when deciding whether frame-sequence
-  material must be re-generated. Current grade is `unblend-white-v6`
-  (**lossless**, 2026-10-20 起；v5/v3 are history — see
-  `docs/PR-REPORT-ASSET-ARCH-LOSSLESS-2026-10-19.md` for the lossless switch and
-  its bit-exact verification); v4 (hole restore) is suspended and is **not** a
-  grade. The runtime grade string, the build gate, and the material on disk must
-  all agree — a mismatch means the material is re-generated, never the constant.
-- Read `docs/ONEDIR_PACKAGING.md` §「随包分发的第三方二进制」and
-  `docs/PR-REPORT-GAME-FPS-2026-10-11.md` when touching the game-FPS chain
-  (`pet/game_fps.py`, `pet/fps_monitor.py`, `pet/island_fps.py`), the bundled
-  PresentMon backend under `resources/presentmon/` (Windows-only, x64-only,
-  digests gated by `scripts/verify_presentmon.py` at build time; never installed
-  as an MSI/service), or the `fps` member of `island_metrics` and the two
-  process-level `game_fps_*` keys. Real frame readings are **not** verified on
-  this machine: capture runs with **plain user permissions only** — the pet never
-  self-elevates and runs no resident elevated helper. The only elevation is the
-  user-clicked, one-time settings button (`pet/fps_permission.py`) that adds the
-  current account (token SID) to Performance Log Users via one UAC prompt; it
-  takes effect after re-logon. Until then, where the user is not in that
-  group the segment shows the raw `access denied` reason
-  from the capture backend and keeps no value (never a fake `0`). No ETW session
-  or real frame reading has ever been exercised here — do not cite any measured
-  FPS as verified.
-- Read `docs/STABLE_BUILDS.md` when changing release/build workflows.
+  byte-identical to the runtime ones). Current grade is `unblend-white-v6`
+  (lossless). The runtime grade string, the build gate, and the material on disk
+  must all agree — a mismatch means the material is re-generated, never the
+  constant.
 - Read `docs/CONTEXT-MENU-RESEARCH-AND-REFACTOR-2026-08-25.md` when changing
   context-menu structure, styling, interaction, or platform behavior.
 - Read `docs/SETTINGS-CHANGE-GATES.md` before adding, moving, removing, or
