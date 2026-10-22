@@ -240,6 +240,10 @@ def build_pet_controls(host) -> None:
     # `if instance_id` 在 slot0 拿到显式身份后把主宠页也一起禁掉了，tooltip 却让人
     # "去主桌宠设置"，指向一个用户正站着的地方（2026-10-10 终审 A04-b）。
     host.autostart_check.setToolTip("影响所有桌宠：系统登录项只有一份。")
+    # 托盘图标：关掉后托盘不显示，右键菜单/桌宠仍可用；再次启动桌宠会打开设置页，
+    # 所以「托盘藏了 + 桌宠也藏了」仍能回到设置与退出。
+    host.tray_icon_check = ToggleSwitch(host)
+    host.tray_icon_check.setChecked(bool(host.config.get("tray_icon_hidden", False)))
     host.dock_icon_check = None
     if sys.platform == "darwin":
         host.dock_icon_check = ToggleSwitch(host)

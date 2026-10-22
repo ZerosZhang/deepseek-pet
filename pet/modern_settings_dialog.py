@@ -342,6 +342,13 @@ class ModernSettingsDialog(QDialog):
             )
         general_layout.addWidget(SettingsSection("应用启动", launch_rows, general_content))
         window_rows = [
+            SettingRow(
+                "tray_icon",
+                "隐藏托盘图标",
+                "隐藏系统托盘里的桌宠图标。隐藏后仍可用右键菜单操作；"
+                "想再打开本页，直接再次启动桌宠即可（会打开设置）。",
+                self.tray_icon_check,
+            ),
             SettingRow("on_top", "窗口置顶", "始终将桌宠保持在其他窗口上方。", self.on_top_check),
         ]
         if sys.platform == "win32":
@@ -961,7 +968,7 @@ class ModernSettingsDialog(QDialog):
                 ("应用启动", claim("autostart")),
                 # 「光标隐藏时自动穿透」回主组：它也是窗口旗标类偏好（与置顶/全屏隐藏同族），
                 # 用户找它会先看这一组；原先跟「直播捕获」一起塞进"Windows 兼容"是埋掉了它。
-                ("窗口与系统", claim("dock_icon", "on_top", "auto_hide_fullscreen", "cursor_hidden_passthrough", "cross_screen")),
+                ("窗口与系统", claim("tray_icon", "dock_icon", "on_top", "auto_hide_fullscreen", "cursor_hidden_passthrough", "cross_screen")),
                         # 「多开」分组已随拓扑收口 Phase A 隐藏（见上方注释）
             ]
         )
@@ -1249,6 +1256,7 @@ class ModernSettingsDialog(QDialog):
         self.config.set("on_top", self.on_top_check.isChecked())
         if self.dock_icon_check is not None:
             self.config.set("show_dock_icon", self.dock_icon_check.isChecked())
+        self.config.set("tray_icon_hidden", self.tray_icon_check.isChecked())
         self.config.set("no_move", self.no_move_check.isChecked())
         self.config.set("mouse_through", self.mouse_through_check.isChecked())
         self.config.set("drop_gravity", self.drop_gravity_check.isChecked())

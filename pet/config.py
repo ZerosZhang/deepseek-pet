@@ -613,6 +613,7 @@ class Config:
             "user_customized": False,  # 批 C：仅当用户在该子肥鱼自己的设置界面保存过才置真
             "on_top": True,
             "show_dock_icon": True,
+            "tray_icon_hidden": False,
             "no_move": False,
             "character": catalog.DEFAULT_CHARACTER,
             "playback_speed": 1.0,
@@ -834,6 +835,7 @@ class Config:
             "scale",
             "on_top",
             "show_dock_icon",
+            "tray_icon_hidden",
             "no_move",
             "character",
             "user_customized",

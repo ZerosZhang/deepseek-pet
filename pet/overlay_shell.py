@@ -3301,7 +3301,7 @@ class OverlayShell(QObject):
         self._sync_runtime_marker()  # D7：设置进程避让
         self.app.installEventFilter(self)  # Esc 全局兜底（弹弓取消）
         if self.tray is not None:
-            self.tray.show()
+            self._apply_tray_icon_visibility()
             self._arm_tray_icon_refresh()
 
     def _show_all_hosts(self) -> None:
@@ -3570,6 +3570,24 @@ class OverlayShell(QObject):
             logging.exception("overlay: 重建托盘菜单失败（托盘保留）")
         self._ensure_recovery_entry()
 
+    def _apply_tray_icon_visibility(self) -> None:
+        """按 ``tray_icon_hidden`` 显示/隐藏托盘图标（设置页与外部改配置共用）。
+
+        托盘是隐藏桌宠/隐藏托盘后仍能操作的那条退路，但用户明确要求可以关：
+        关掉后仍可经右键菜单（桌宠可见时）操作，或再次启动桌宠打开设置页。
+        """
+        tray = getattr(self, "tray", None)
+        if tray is None:
+            return
+        hidden = bool(self._config.get("tray_icon_hidden", False))
+        try:
+            if hidden:
+                tray.hide()
+            elif not tray.isVisible():
+                tray.show()
+        except RuntimeError:
+            logging.debug("overlay: 托盘已销毁，跳过显隐应用", exc_info=True)
+
     def announce_slot0_profile_problem(self, diagnosis: str) -> bool:
         """把 slot0 档案降级的诊断说给用户（含路径与显式恢复入口）。
 
@@ -3818,6 +3836,7 @@ class OverlayShell(QObject):
     # ---------------------------------------------------------------- 4.1b 窗口能力
     def refresh_settings(self) -> None:
         """外部配置变更应用点（AppShell._apply_external_config_change 扇出）。"""
+        self._apply_tray_icon_visibility()
         self._apply_window_capabilities()
         # self_talk 族热改：重读字段并按新口径重排程（schedule_self_talk
         # 先停表再按 enabled 早退，开/关/改间隔都收敛到这一条路径）。

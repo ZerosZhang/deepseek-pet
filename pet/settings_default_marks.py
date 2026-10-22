@@ -73,6 +73,7 @@ _ROW_DEFAULT_PATHS: dict[str, str | tuple[str, float]] = {
     "web_search_fetch_pages": "chat.web_search.fetch_pages",
     # macOS 专属行（darwin 分支才构造）：行键与配置键不同名，必须显式登记
     "dock_icon": "show_dock_icon",
+    "tray_icon": "tray_icon_hidden",
 }
 
 #: 「控件不在这四类里」的哨兵：区分它与 ModernSelect 合法的空数据（``None``）。

@@ -1117,6 +1117,27 @@ class AppShell:
             if callable(prewarm):
                 prewarm()
         _mac_set_dock_icon_visible(bool(self.config.get("show_dock_icon", True)))
+        self._apply_tray_icon_visibility()
+
+    def _apply_tray_icon_visibility(self) -> None:
+        """按 ``tray_icon_hidden`` 应用托盘显隐（overlay 与 legacy 两套托盘）。"""
+        hidden = bool(self.config.get("tray_icon_hidden", False))
+        trays = []
+        overlay_shell = getattr(self, "_overlay_shell", None)
+        tray = getattr(overlay_shell, "tray", None) if overlay_shell is not None else None
+        if tray is not None:
+            trays.append(tray)
+        legacy = getattr(self, "_tray", None)
+        if legacy is not None and legacy not in trays:
+            trays.append(legacy)
+        for item in trays:
+            try:
+                if hidden:
+                    item.hide()
+                elif not item.isVisible():
+                    item.show()
+            except RuntimeError:
+                logging.debug("托盘已销毁，跳过显隐应用", exc_info=True)
 
     def open_settings_process(self, instance=None, page: str | None = None) -> bool:
         """拉起独立设置进程；True = 已交给独立进程（不得再开进程内对话框）。
@@ -2546,7 +2567,8 @@ class AppShell:
 
         menu.addAction('退出', self.request_app_quit)
         tray.setToolTip('dsh-pet 独立桌宠')
-        tray.show()
+        if not bool(self.config.get('tray_icon_hidden', False)):
+            tray.show()
         # F5：菜单已由新菜单接管后，显式记录所有权并释放被替换的旧菜单
         #（owner 生命周期：强引用保活到替换，旧菜单延迟销毁防泄漏）。
         self._install_tray_menu(menu, tray_submenus)
@@ -2643,6 +2665,36 @@ def _configure_linux_fcitx_input_method() -> None:
 PetApp = AppShell
 
 
+def _launch_settings_process() -> bool:
+    """拉起「只打开设置页」的独立进程（已是第二个实例时的唯一入口）。
+
+    源码运行用 ``<python> -m pet --settings``，冻结产物用 ``<exe> --settings``
+    （打包入口在 import pet.app 之前就分流）。子进程完全脱离父进程（无控制台、
+    不共享句柄）：父进程马上退出，设置窗必须活下来。
+
+    返回是否成功拉起；失败只留痕，不阻塞调用方的退出路径。
+    """
+    import subprocess
+
+    if getattr(sys, "frozen", False):
+        argv = [sys.executable, "--settings"]
+    else:
+        argv = [sys.executable, "-m", "pet", "--settings"]
+    kwargs: dict = {"close_fds": True, "stdin": subprocess.DEVNULL}
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
+    try:
+        subprocess.Popen(argv, **kwargs)
+    except OSError:
+        logging.exception("拉起设置页失败（已有实例在运行）")
+        return False
+    logging.info("已拉起设置页进程：%s", argv)
+    return True
+
+
 def main(argv: list[str] | None = None, enable_chat: bool = True) -> int:
     # ``enable_chat`` 只为旧打包入口（packaging/pet_entry_no_chat.py）保留形参，
     # AI 对话 UI 已整体移除，两个入口行为一致。
@@ -2688,13 +2740,16 @@ def main(argv: list[str] | None = None, enable_chat: bool = True) -> int:
     # 配置目录副作用（抢 slot-1、落种 config-slot-N.json）之前退场。
     overlay_gate = overlay_gate_mod.acquire_overlay_instance_gate(config_dir)
     if not overlay_gate.acquired:
-        # 双击桌面宠物场景：不弹窗、不阻塞，只留痕 + 退出。退出码对齐
-        # pet/__main__.py 的 settings.lock 惯例（「已有实例，本次退出」= 0），
+        # 已有实例：再启动一次 = 打开设置页，而不是无声退出。这是「隐藏托盘图标」
+        # 与「隐藏桌宠」同时成立时唯一的逃生口（既点不到桌宠也找不到托盘）。
+        # 设置页在独立进程里跑（--settings，自带 settings.lock 单实例），本进程随之
+        # 退出；退出码对齐 pet/__main__.py 的惯例（「已有实例，本次退出」= 0），
         # 免得外壳把"第二实例"当启动失败报错。
         logging.warning(
-            "已有实例在运行（门 %s，持有者 pid=%s）：本次启动退出",
+            "已有实例在运行（门 %s，持有者 pid=%s）：打开设置页后退出",
             overlay_gate.path, overlay_gate.holder_pid(),
         )
+        _launch_settings_process()
         return overlay_gate_mod.DUPLICATE_EXIT_CODE
 
     # 4.4a 停用多进程多宠退役层的**槽位文件锁**：main() 不再抢 slot-N.lock
