@@ -154,41 +154,6 @@ def test_shell_set_sprite_visible_keeps_window_semantics(tmp_path):
         shell._delete_runtime_marker()
 
 
-def test_tray_menu_has_per_sprite_visibility_toggle(tmp_path):
-    """托盘逐只子菜单：勾选态 = 该 sprite 当前可见性；重开菜单同步刷新。"""
-    shell, lib = _make_shell(tmp_path)
-    try:
-        second = shell._sprite_factory(lib, QPointF(0, 0), 1.0)
-        shell.overlay.add_sprite(second)
-        shell._spawned.append(second)
-        shell._spawned_slots[second] = 3
-        shell._refresh_tray_menu()
-
-        menu = shell._tray_menu
-        assert menu is not None
-        sub = next(a.menu() for a in menu.actions()
-                   if a.text().startswith("小肥鱼"))
-        action = next(a for a in sub.actions() if a.text() == "显示这只")
-        assert action.isCheckable() is True
-        assert action.isChecked() is True
-        assert shell._sprite_visible(second) is True
-
-        action.trigger()                       # 取消勾选 = 隐藏这只
-        assert shell._sprite_visible(second) is True, \
-            "菜单还开着，逐只显隐不许内联执行"
-        assert _wait_until(lambda: second.visible is False), \
-            "菜单关闭后必须把这只藏起来"
-        assert shell.sprite.visible is True    # 只影响被点的那只
-
-        # 弹出前同步：外部改了标志也能反映到勾选态
-        second.visible = True
-        shell._sync_tray_pet_visibility()
-        assert action.isChecked() is True
-    finally:
-        shell.overlay.close()
-        shell._delete_runtime_marker()
-
-
 def test_click_route_ignores_hidden_sprite(tmp_path):
     """隐藏 sprite 不参与鼠标路由（按下不建立 grab）。"""
     from PySide6.QtCore import QEvent

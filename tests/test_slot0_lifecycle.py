@@ -37,49 +37,6 @@ def test_close_zero_preserves_children_and_restores_identity(tmp_path):
         shell.stop()
 
 
-def test_tray_close_of_the_only_pet_keeps_process_tray_and_services(tmp_path, monkeypatch):
-    """单宠经托盘「退出这只」关掉后 = "0 只"这个合法状态：进程/托盘/壳级服务都在，
-    宠物驱动停、活跃集合留空、不自动复活，恢复入口仍可达（规范 §四）。
-
-    入口与被修对象是同一件事，所以全过程**从托盘 QAction 触发**进入，不直接
-    call ``exit_pet``（UI 入口闭环另见 tests/test_single_pet_close_entry.py）。
-    """
-    import time
-
-    shell, _ = _make_persistent_shell(tmp_path)
-    quits: list = []
-    monkeypatch.setattr(shell.app, 'quit', lambda *a, **k: quits.append(1))
-    try:
-        assert shell.sprite is not None, '前提：单宠（slot0）在'
-        menu = shell.tray.contextMenu()
-        sub = next(a.menu() for a in menu.actions()
-                   if a.text() == '主肥鱼 [slot-0]')
-        action = next(a for a in sub.actions() if a.text() == '退出这只')
-        action.trigger()
-
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline and shell.sprite is not None:
-            app.processEvents()
-            time.sleep(0.01)
-        assert shell.sprite is None, '菜单关闭后这只必须真的关掉'
-        assert quits == [], '关闭最后一只不许退出应用'
-        assert shell.overlay.sprites == []
-        assert shell._active_slots() == []
-        assert profiles.load_active_set(tmp_path / APP_DIR_NAME).slots == (), (
-            '关闭 = 该槽留空（落盘为空），不是"退出时清掉整个集合"')
-        # 壳级服务照旧：托盘、D12 指令通道、全屏 watcher 都不随最后一只宠关掉
-        assert shell.tray is not None, '无宠时托盘保留（唯一恢复入口）'
-        assert shell._command_watcher is not None and shell._command_timer.isActive()
-        assert shell._watcher is not None
-        assert not shell.driver._timer.isActive(), '0 只时宠物驱动停（没像素要上屏）'
-        menu = shell.tray.contextMenu()
-        labels = [a.text() for a in menu.actions()]
-        assert '生成 / 恢复 slot0' in labels, labels
-        assert not [a for a in menu.actions() if a.menu() is not None], '不许留空逐只菜单'
-    finally:
-        shell.stop()
-
-
 def test_v2_empty_builds_no_pet(tmp_path):
 
     directory = tmp_path / APP_DIR_NAME

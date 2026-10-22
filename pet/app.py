@@ -2535,37 +2535,16 @@ class AppShell:
         # 本段全部条目都会动窗口面（显示/激活桌宠窗、重建角色窗面）或冒泡/系统
         # 登录项：托盘菜单是原生弹出（macOS 上是 NSMenu 跟踪会话），会话中做这些
         # 会被 AppKit 抑制（首次点击无反应，issue #4 家族），故一律走
+        # 本段条目都会动窗口面：托盘菜单是原生弹出（macOS 上是 NSMenu 跟踪会话），
+        # 会话中操作窗口会被 AppKit 抑制（首次点击无反应，issue #4 家族），故走
         # add_tray_action——菜单先关，回调延到菜单真的不在之后再执行。
         add_tray_action(menu, '显示 / 隐藏', toggle_visible)
-        add_tray_action(menu, '回到右下角', lambda: win.go_default_corner())
 
         add_tray_action(menu, '桌宠设置', self.instance.open_modern_settings)
 
-        mouse_through = add_tray_toggle(
-            menu, '鼠标穿透', bool(self.config.get('mouse_through', False)),
-            win.set_mouse_through)
-
         menu.addSeparator()
-
-        auto = add_tray_toggle(
-            menu, '开机自启', autostart_mod.is_enabled(),
-            lambda enabled: self.instance._set_autostart(enabled, win))
-
-        def sync_tray_checks() -> None:
-            # 设置对话框/右键菜单里改过的开关，弹出托盘菜单前同步复选状态
-            #（托盘菜单在 _build_tray 时一次性构建，不复用则不刷新会过期）。
-            # 只改看相、不触发副作用：副作用挂 triggered，程序化 setChecked 不发它。
-            mouse_through.setChecked(bool(self.config.get('mouse_through', False)))
-            auto.setChecked(autostart_mod.is_enabled())
-
-        menu.aboutToShow.connect(sync_tray_checks)
-
-        menu.addSeparator()
-        menu.addAction('DeepSeek 余额', lambda: self.show_balance(win))
 
         menu.addAction('退出', self.request_app_quit)
-
-        tray.setContextMenu(menu)
         tray.setToolTip('dsh-pet 独立桌宠')
         tray.show()
         # F5：菜单已由新菜单接管后，显式记录所有权并释放被替换的旧菜单

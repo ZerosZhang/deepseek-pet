@@ -82,7 +82,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QBitmap, QGuiApplication, QIcon, QImage, QPixmap, QRegion
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon, QWidget
 
-from . import autostart as autostart_mod
 from . import catalog
 from . import click_sound
 from . import overlay_settings_command
@@ -987,7 +986,6 @@ class OverlayShell(QObject):
         self._tray_menu: QMenu | None = None
         self._tray_actions: list = []
         # 托盘逐只显隐勾选动作（M14：[sprite, QAction]，菜单重建时替换）
-        self._pet_visible_actions: list = []
         self._session_watcher = None
         # D12 指令通道（overlay 拓扑：独立设置进程 → 主进程）；未装时为惰性空转
         self._command_watcher = None
@@ -3656,122 +3654,24 @@ class OverlayShell(QObject):
         return opened
 
     def _refresh_tray_menu(self) -> None:
-        """重建聚合托盘菜单：进程级动作 + 逐只子菜单（legacy 单托盘多窗语义）。
+        """重建托盘菜单：只留「显示 / 隐藏」「桌宠设置」「退出」。
 
-        逐条对照 legacy（app.py:3203-3301，见 PR 报告）：
-        - 顶层「显示 / 隐藏」「回到右下角」= legacy 主窗两项（overlay 单窗，
-          显隐天然覆盖全部 sprite）；
-        - 「生小肥鱼 / 退出子肥鱼」= overlay 多宠生命周期入口（legacy 在右键
-          菜单/设置页，不重复造第二个实现，直接复用壳的两个公开方法）；
-        - **只要 ≥1 只**就有逐只子菜单「主肥鱼 / 小肥鱼 [slot-N]」= legacy 每窗
-          子菜单，含「回到右下角」「退出这只」（见 :meth:`_exit_pet_from_tray`）；
-          「显示这只」（per-sprite visible，M14）只在 ≥2 只时挂——逐只显隐回答的
-          是"这几只里藏哪只"，只剩一只时顶层「显示 / 隐藏」已经按整窗语义给过；
-          顶层「显示 / 隐藏」仍是整窗语义（overlay 单窗，全显全隐）。
-          **单宠也必须挂**：关闭宠物 ≠ 退出应用（规范 §一/§四），只在 ≥2 只时
-          才建逐只菜单，等于让单宠用户的"关闭"只剩顶层「退出」（= 退出整个应用）
-          一条路——实测发现时就是这样（见 .scratch/product-close-approved-gui-
-          20261011/REPORT.md §5）。0 只时不建（没有"这只"可指，也就不会有
-          指向 None 的条目）；恢复入口是下面那条「生成 / 恢复 slot0」；
-        - 「桌宠设置」按主身份路由（D13）、「退出」= app.quit；
-        - 「鼠标穿透」「开机自启」= legacy 托盘后段两项（穿透只有托盘/设置页能取消；
-          自启勾选态按系统登录项实况，弹出前同步）。
-
-        **派发契约**（与 legacy 托盘 `3356d67` 同口径）：会动窗面/冒泡/系统登录项
-        的条目一律走 ``add_tray_action`` / ``add_tray_toggle``——菜单先关，回调延到
-        菜单真的不在之后再执行。macOS 的托盘菜单是 AppKit 原生 NSMenu 跟踪会话，
-        会话中新建/激活窗口会被抑制（issue #4 家族：点了没反应）；勾选项的副作用
-        挂 ``triggered`` 而不是 ``toggled``，弹出前那次程序化 ``setChecked`` 就不会
-        顺手重写配置/登录项。本壳是 overlay 拓扑下用户**实际看到**的托盘。
+        精简版不再有多宠生命周期入口（生小肥鱼 / 退出子肥鱼 / 逐只子菜单）、
+        鼠标穿透与开机自启的托盘开关；这些能力要么已删除，要么只保留在右键菜单
+        与设置页里。派发契约不变：会动窗面/开窗的条目走 ``add_tray_action``
+        （菜单先关，回调延到菜单真的不在之后再执行——macOS 原生菜单跟踪会话里
+        新建窗口会被抑制）；「退出」是结束进程，刻意不延迟。
         """
         if self.tray is None:
             return
 
-        def add_tray_toggle(target: QMenu, label: str, checked, apply):
-            """可勾选托盘条目：勾选态即时翻转，副作用延到菜单关闭后执行。
-
-            与 ``app.py::_build_tray`` 的同型助手逐位一致（那里是嵌套函数，导不出来）。
-            ``add_tray_action`` 的回调在菜单关闭后执行，此时 ``isChecked()`` 已是用户
-            点出来的最终值——故 apply 收勾选态，而不是在连接时把它绑死。
-            """
-            action = add_tray_action(
-                target, label, lambda: apply(bool(action.isChecked())))
-            action.setCheckable(True)
-            action.setChecked(bool(checked))
-            return action
-
         menu = QMenu()
         # 气泡是置顶 Tool 窗口（层级高于菜单）：弹出前先隐藏（legacy 同款）
         menu.aboutToShow.connect(self._hide_bubble_for_menu)
-        # 弹出前同步逐只勾选态（外部改过 sprite.visible 也能反映）
-        menu.aboutToShow.connect(self._sync_tray_pet_visibility)
-        # 本段无一条是纯记账：显隐要动合成窗、归位要动 sprite 位置、生/退桌宠要动
-        # sprite 与各自库（还可能冒泡），全按上面的派发契约走。
         add_tray_action(menu, "显示 / 隐藏", self._toggle_pet_visible)
-        add_tray_action(menu, "回到右下角",
-                        lambda: self._go_default_corner(self.sprite))
-        menu.addSeparator()
-        add_tray_action(menu, "生成 / 恢复 slot0（档案损坏，见日志）"
-                        if self.slot0_profile_diagnosis() and self.sprite is None
-                        else ("生成 / 恢复 slot0" if self.sprite is None else "生小肥鱼"),
-                        self.spawn_pet)
-        add_tray_action(menu, "退出子肥鱼", self.clear_spawned_pets)
-        # tooltip 默认不显示（QMenu 的默认值），而这条关闭入口的 tooltip 正是
-        # "档案还在、怎么弄回来"的说明，必须能看见。
-        menu.setToolTipsVisible(True)
-        visible_actions: list = []
-        entries = self._pet_entries()
-        if entries:
-            menu.addSeparator()
-            # 逐只显隐只在"≥2 只"时有意义：它回答的是"这几只里藏哪只"。只剩一只时
-            # 藏它 = 整窗没有内容可画，而那条路顶层「显示 / 隐藏」已经按整窗语义
-            # 给过了（拆成"藏这一只"只会多出一个等价但更弱的状态，且主宠即宿主
-            # 合成窗——SpriteMenuFacade.hide() 记的正是这个口径）。
-            # 关闭入口不受此限：单宠缺的从来不是显隐，而是"关掉它但别退出应用"。
-            per_pet_visibility = len(entries) > 1
-            for sprite, label in entries:
-                # 子菜单也是同一个原生跟踪会话的一部分，会话中做这些同样会被抑制：
-                # 子项与顶层同族（同一批窗面/显隐状态），一律延迟派发。
-                # 关闭观测目标由 ``add_tray_action`` 统一取整棵树（``shared._menu_tree``）：
-                # 子菜单关掉 ≠ 会话结束，根菜单还开着就还在同一次原生跟踪里。
-                sub = menu.addMenu(label)
-                add_tray_action(sub, "回到右下角",
-                                lambda s=sprite: self._go_default_corner(s))
-                if per_pet_visibility:
-                    toggle = add_tray_toggle(
-                        sub, "显示这只", self._sprite_visible(sprite),
-                        lambda want, s=sprite: self.set_sprite_visible(s, want))
-                    visible_actions.append((sprite, toggle))
-                close = add_tray_action(sub, "退出这只",
-                                        lambda s=sprite: self._exit_pet_from_tray(s))
-                close.setToolTip(
-                    "关闭这只桌宠：档案与位置保留，可用托盘「生成 / 恢复 slot0」再恢复；"
-                    "不退出应用。"
-                    if sprite is self.sprite else
-                    "关闭这只桌宠：它自己的档案保留，可用托盘「生小肥鱼」再生成；"
-                    "不影响其它桌宠。")
-        self._pet_visible_actions = visible_actions
-        menu.addSeparator()
-        # 与 legacy 托盘同口径：菜单先关、回调延到菜单关闭后执行（原生菜单跟踪
-        # 会话里开窗/冒泡会被 AppKit 抑制，见 shared.run_after_menu_closed）。
         add_tray_action(menu, "桌宠设置",
                         lambda: self.open_settings_for(self.sprite))
-        # legacy 托盘两项（app.py:3333-3343）：鼠标穿透的取消入口只有托盘/设置页，
-        # 开着时桌宠点不动；开机自启此前只有右键菜单有勾选项。两项都写配置、写系统
-        # 登录项，按派发契约走勾选版助手。
-        mouse_through = add_tray_toggle(
-            menu, "鼠标穿透", bool(self._config.get("mouse_through", False)),
-            self._on_user_through_changed)
         menu.addSeparator()
-        autostart = add_tray_toggle(
-            menu, "开机自启", self._autostart_enabled(), self._set_autostart_from_tray)
-        # 弹出前同步勾选态（设置页/右键菜单改过的不刷新会过期，legacy 同款）。
-        # 只改看相、不触发副作用：副作用挂 triggered，程序化 setChecked 不发它。
-        menu.aboutToShow.connect(
-            lambda: self._sync_tray_toggle_checks(mouse_through, autostart))
-        menu.addSeparator()
-        # 「退出」刻意不延迟：它不是窗面动作，而是结束本进程（会话中被抑制的对象
-        # 在退出路径上不存在），legacy 托盘同样是裸 addAction——两边同判断。
         menu.addAction("退出", self.app.quit)
         old = self._tray_menu
         self.tray.setContextMenu(menu)  # 新菜单先接管，旧菜单才允许释放（F5）
@@ -3786,60 +3686,6 @@ class OverlayShell(QObject):
         self._tray_actions = snapshot
         if old is not None and old is not menu:
             old.deleteLater()
-
-    def _autostart_enabled(self) -> bool:
-        """系统当前是否已注册开机自启（legacy ``autostart_mod.is_enabled()`` 口径）。"""
-        try:
-            return bool(autostart_mod.is_enabled())
-        except Exception:
-            logging.debug("overlay: 读取开机自启状态失败", exc_info=True)
-            return False
-
-    def _set_autostart_from_tray(self, enabled: bool) -> None:
-        """托盘「开机自启」→ 实例的 ``_set_autostart(enabled, 壳)``。
-
-        写系统登录项的实现在 AppShell（``app.py:_set_autostart``，覆盖三平台），
-        壳只做转发：失败时它用 ``win.show_bubble`` 提示，overlay 下 ``win`` 就是
-        本壳（具 ``show_bubble`` 宿主面）。取不到该方法（测试替身/精简装配）时
-        静默降级，绝不因托盘一项拖垮菜单。
-        """
-        setter = getattr(self._instance, "_set_autostart", None)
-        if not callable(setter):
-            logging.debug("overlay: 实例无 _set_autostart，托盘项跳过")
-            return
-        try:
-            setter(bool(enabled), self)
-        except Exception:
-            logging.exception("overlay: 托盘写入开机自启失败")
-
-    def _sync_tray_toggle_checks(self, mouse_through, autostart) -> None:
-        """托盘弹出前同步两个勾选项（legacy ``sync_tray_checks`` 口径）。
-
-        设置页/右键菜单改过的开关若不刷新，托盘里的勾选态会过期（用户会以为
-        「点了没反应」）。
-        """
-        pairs = ((mouse_through, bool(self._config.get("mouse_through", False))),
-                 (autostart, self._autostart_enabled()))
-        for action, value in pairs:
-            try:
-                action.setChecked(bool(value))
-            except RuntimeError:
-                continue  # 菜单已销毁（wrapper 失效）：跳过
-
-    def _pet_entries(self) -> list:
-        """托盘逐只条目：(sprite, 标签)。主宠在前 = 活跃清单列表头口径。"""
-        entries = [(self.sprite, "主肥鱼 [slot-0]")] if self.sprite is not None else []
-        for sprite in self._spawned:
-            slot = self._spawned_slots.get(sprite)
-            label = f"小肥鱼 [slot-{slot}]" if slot is not None else "小肥鱼"
-            entries.append((sprite, label))
-        return entries
-
-    def _exit_pet_from_tray(self, sprite) -> None:
-        """菜单关闭后按捕获sprite走同一可逆关闭契约；过期目标为空操作。"""
-        from .sprite_menu_facade import SpriteMenuFacade
-
-        SpriteMenuFacade(self, sprite).on_exit_pet()
 
     def _go_default_corner(self, sprite) -> None:
         """把指定 sprite 送回右下角（window.go_default_corner 等价）。
@@ -5600,7 +5446,6 @@ class OverlayShell(QObject):
                 self._alert_copy_teardown = False
             if sprite is getattr(self, "sprite", None):
                 self._notify_pet_hidden()
-        self._sync_tray_pet_visibility()
         # 可见 sprite 数变化 → 档位机立即重评（零可见 sprite 的目标档位是 T3）
         self._note_sprite_visibility_changed()
         # 承载宠被藏（或在无宠期重新可见）：提醒交接 / 恢复走同一漏斗
@@ -5668,14 +5513,6 @@ class OverlayShell(QObject):
         if target is None:
             return
         self.set_sprite_visible(target, not self._sprite_visible(target))
-
-    def _sync_tray_pet_visibility(self) -> None:
-        """托盘弹出前/显隐变更后同步逐只勾选态（外部也可能改过 sprite.visible）。"""
-        for sprite, action in list(getattr(self, "_pet_visible_actions", [])):
-            try:
-                action.setChecked(self._sprite_visible(sprite))
-            except RuntimeError:
-                continue  # 菜单已销毁（wrapper 失效）：跳过
 
     def set_pet_visible(self, visible: bool) -> None:
         """显隐切换（app.py toggle_visible 等价）+ 岛状态同步。
